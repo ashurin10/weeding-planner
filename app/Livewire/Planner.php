@@ -11,8 +11,18 @@ class Planner extends Component
 {
     public $grandTotal = 0;
     public $progress = 0;
+    public $editingItemId = null;
 
     protected $listeners = ['refreshComponent' => '$refresh'];
+
+    public function toggleEdit($itemId)
+    {
+        if ($this->editingItemId === $itemId) {
+            $this->editingItemId = null;
+        } else {
+            $this->editingItemId = $itemId;
+        }
+    }
 
     public function render()
     {
