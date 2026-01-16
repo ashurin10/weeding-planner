@@ -46,6 +46,284 @@
             }
         }
     </script>
+
+    <!-- Firebase SDKs (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <script>
+        // --- FIREBASE CONFIGURATION ---
+        // 1. Go to console.firebase.google.com
+        // 2. Create a project -> Add Web App -> Copy config
+        // 3. Paste it below to replace the empty strings
+        const firebaseConfig = {
+            apiKey: "PASTE_API_KEY_HERE",
+            authDomain: "PASTE_AUTH_DOMAIN_HERE",
+            databaseURL: "PASTE_DATABASE_URL_HERE",
+            projectId: "PASTE_PROJECT_ID_HERE",
+            storageBucket: "PASTE_STORAGE_BUCKET_HERE",
+            messagingSenderId: "PASTE_SENDER_ID_HERE",
+            appId: "PASTE_APP_ID_HERE"
+        };
+
+        // Initialize Firebase if config is present
+        let db = null;
+        try {
+            if (firebaseConfig.apiKey !== "PASTE_API_KEY_HERE") {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                console.log("Firebase initialized");
+            } else {
+                console.warn("Firebase not configured yet.");
+            }
+        } catch (e) {
+            console.error("Firebase init error:", e);
+        }
+
+        function weddingApp() {
+            return {
+                isAuthenticated: Alpine.$persist(false).as('app_auth_state'),
+                pin: Alpine.$persist('110702').as('app_pin'),
+
+                categories: [], // Start empty, load from DB or Local
+
+                inputPin: '',
+                loginError: false,
+                editingItemId: null,
+                isOnline: false,
+                isSaving: false,
+                _saveTimeout: null,
+
+                initApp() {
+                    console.log('Wedding Planner App Initialized');
+
+                    if (db) {
+                        this.isOnline = true;
+
+                        // 1. LISTEN for changes from Firebase
+                        const dataRef = db.ref('wedding_data/categories');
+
+                        // Use 'value' listener to get initial state and updates
+                        dataRef.on('value', (snapshot) => {
+                            const data = snapshot.val();
+                            if (data) {
+                                // Only update if we are not currently saving to avoid loops
+                                if (!this.isSaving) {
+                                    this.categories = data;
+                                }
+                            } else {
+                                // If database is empty, seed it
+                                this.categories = getInitialData();
+                                this.saveToFirebase();
+                            }
+                        });
+
+                    } else {
+                        // OFFLINE MODE: Use LocalStorage
+                        const saved = localStorage.getItem('app_data');
+                        this.categories = saved ? JSON.parse(saved) : getInitialData();
+                    }
+
+                    // 2. WATCH for local changes
+                    this.$watch('categories', (value) => {
+                        this.isSaving = true;
+
+                        if (this.isOnline) {
+                            // Debounce save to Firebase
+                            clearTimeout(this._saveTimeout);
+                            this._saveTimeout = setTimeout(() => {
+                                this.saveToFirebase();
+                            }, 1000);
+                        } else {
+                            // Save to LocalStorage immediately
+                            localStorage.setItem('app_data', JSON.stringify(value));
+                            setTimeout(() => this.isSaving = false, 500);
+                        }
+                    });
+                },
+
+                saveToFirebase() {
+                    if (!db) return;
+                    db.ref('wedding_data/categories').set(this.categories)
+                        .then(() => {
+                            this.isSaving = false;
+                            console.log("Data synced to Firebase");
+                        })
+                        .catch(err => {
+                            console.error("Sync failed", err);
+                            this.isSaving = false;
+                        });
+                },
+
+                login() {
+                    if (this.inputPin === this.pin) {
+                        this.isAuthenticated = true;
+                        this.inputPin = '';
+                        this.loginError = false;
+                    } else {
+                        this.loginError = true;
+                        this.inputPin = '';
+                    }
+                },
+
+                logout() {
+                    this.isAuthenticated = false;
+                },
+
+                get progress() {
+                    let total = 0;
+                    let completed = 0;
+                    this.categories.forEach(cat => {
+                        if (cat.items) {
+                            cat.items.forEach(item => {
+                                total++;
+                                if (item.completed) completed++;
+                            });
+                        }
+                    });
+                    return total === 0 ? 0 : Math.round((completed / total) * 100);
+                },
+
+                get grandTotal() {
+                    let total = 0;
+                    this.categories.forEach(cat => {
+                        if (cat.items) {
+                            cat.items.forEach(item => {
+                                total += (parseFloat(item.price) || 0);
+                            });
+                        }
+                    });
+                    return total;
+                },
+
+                calculateCategoryTotal(category) {
+                    if (!category.items) return 0;
+                    return category.items.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+                },
+
+                addCategory() {
+                    const id = Date.now();
+                    this.categories.push({
+                        id: id,
+                        title: 'New Category',
+                        items: []
+                    });
+                },
+
+                deleteCategory(id) {
+                    if (confirm('Are you sure you want to delete this category?')) {
+                        this.categories = this.categories.filter(c => c.id !== id);
+                    }
+                },
+
+                addItem(categoryId) {
+                    const category = this.categories.find(c => c.id === categoryId);
+                    if (category) {
+                        if (!category.items) category.items = []; // Ensure items array exists
+                        const itemId = Date.now();
+                        category.items.push({
+                            id: itemId,
+                            name: 'New Item',
+                            price: 0,
+                            link: '',
+                            completed: false
+                        });
+                        this.editingItemId = itemId;
+                    }
+                },
+
+                deleteItem(categoryId, itemId) {
+                    const category = this.categories.find(c => c.id === categoryId);
+                    if (category) {
+                        category.items = category.items.filter(i => i.id !== itemId);
+                    }
+                },
+
+                formatMoney(amount) {
+                    return new Intl.NumberFormat('id-ID').format(amount);
+                }
+            }
+        }
+
+        // Updated Data from User Request
+        function getInitialData() {
+            return [
+                {
+                    id: 1,
+                    title: 'Alat Ibadah',
+                    items: [
+                        { id: 11, name: 'Mukena', price: 200000, link: '', completed: false },
+                        { id: 12, name: "Al Qur'an", price: 75000, link: '', completed: false },
+                        { id: 13, name: 'Sajadah', price: 50000, link: '', completed: false },
+                    ]
+                },
+                {
+                    id: 2,
+                    title: 'Skin Care',
+                    items: [
+                        { id: 21, name: 'Face wash', price: 50000, link: '', completed: false },
+                        { id: 22, name: 'Serum', price: 100000, link: '', completed: false },
+                        { id: 23, name: 'Moisturizer', price: 200000, link: '', completed: false },
+                        { id: 24, name: 'Sunscreen', price: 150000, link: '', completed: false },
+                    ]
+                },
+                {
+                    id: 3,
+                    title: 'Pakaian',
+                    items: [
+                        { id: 31, name: 'Baju tidur', price: 100000, link: '', completed: false },
+                        { id: 32, name: 'Baju', price: 150000, link: '', completed: false },
+                        { id: 33, name: 'Jilbab', price: 200000, link: '', completed: false },
+                        { id: 34, name: 'Jeans', price: 100000, link: '', completed: false },
+                    ]
+                },
+                {
+                    id: 4,
+                    title: 'Bodycare',
+                    items: [
+                        { id: 41, name: 'Body lotion', price: 150000, link: '', completed: false },
+                        { id: 42, name: 'Body scrub', price: 50000, link: '', completed: false },
+                        { id: 43, name: 'Deodorant', price: 30000, link: '', completed: false },
+                        { id: 44, name: 'Parfum', price: 250000, link: '', completed: false },
+                    ]
+                },
+                {
+                    id: 5,
+                    title: 'Aksesoris',
+                    items: [
+                        { id: 51, name: 'Sepatu', price: 1500000, link: '', completed: false },
+                        { id: 52, name: 'Tas', price: 100000, link: '', completed: false },
+                        { id: 53, name: 'Jam tangan', price: 100000, link: '', completed: false },
+                    ]
+                },
+                {
+                    id: 6,
+                    title: 'Make Up',
+                    items: [
+                        { id: 61, name: 'Lipstik', price: 100000, link: '', completed: false },
+                        { id: 62, name: 'Maskara', price: 100000, link: '', completed: false },
+                        { id: 63, name: 'Blush on', price: 50000, link: '', completed: false },
+                        { id: 64, name: 'Liptint', price: 100000, link: '', completed: false },
+                        { id: 65, name: 'Foundation', price: 250000, link: '', completed: false },
+                        { id: 66, name: 'Face spray', price: 150000, link: '', completed: false },
+                        { id: 67, name: 'Bedak', price: 150000, link: '', completed: false },
+                    ]
+                },
+                {
+                    id: 7,
+                    title: 'Toiletris',
+                    items: [
+                        { id: 71, name: 'Handuk', price: 200000, link: '', completed: false },
+                        { id: 72, name: 'Bodywash', price: 50000, link: '', completed: false },
+                        { id: 73, name: 'Sampo', price: 50000, link: '', completed: false },
+                        { id: 74, name: 'Kondisioner', price: 50000, link: '', completed: false },
+                        { id: 75, name: 'Pasta gigi', price: 20000, link: '', completed: false },
+                        { id: 76, name: 'Sikat gigi', price: 30000, link: '', completed: false },
+                    ]
+                }
+            ];
+        }
+    </script>
 </head>
 
 <body
@@ -74,7 +352,17 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center">
+                    <div class="flex items-center gap-4">
+                        <template x-if="isOnline">
+                            <span
+                                class="text-xs font-medium uppercase tracking-wide transition-colors flex items-center gap-1"
+                                :class="isSaving ? 'text-rose-400' : 'text-emerald-500'">
+                                <span class="w-2 h-2 rounded-full"
+                                    :class="isSaving ? 'bg-rose-400 animate-pulse' : 'bg-emerald-500'"></span>
+                                <span x-text="isSaving ? 'Saving...' : 'Synced'"></span>
+                            </span>
+                        </template>
+
                         <template x-if="isAuthenticated">
                             <button @click="logout()"
                                 class="text-stone-400 hover:text-stone-600 text-sm font-medium transition-colors">
@@ -300,184 +588,6 @@
             </template>
         </main>
     </div>
-
-    <script>
-        function weddingApp() {
-            return {
-                isAuthenticated: Alpine.$persist(false).as('app_auth_state'),
-                pin: Alpine.$persist('110702').as('app_pin'), // Default PIN
-                categories: Alpine.$persist(getInitialData()).as('app_data'),
-
-                inputPin: '',
-                loginError: false,
-                editingItemId: null,
-
-                initApp() {
-                    console.log('Wedding Planner App Initialized');
-                },
-
-                login() {
-                    if (this.inputPin === this.pin) {
-                        this.isAuthenticated = true;
-                        this.inputPin = '';
-                        this.loginError = false;
-                    } else {
-                        this.loginError = true;
-                        this.inputPin = '';
-                    }
-                },
-
-                logout() {
-                    this.isAuthenticated = false;
-                },
-
-                get progress() {
-                    let total = 0;
-                    let completed = 0;
-                    this.categories.forEach(cat => {
-                        cat.items.forEach(item => {
-                            total++;
-                            if (item.completed) completed++;
-                        });
-                    });
-                    return total === 0 ? 0 : Math.round((completed / total) * 100);
-                },
-
-                get grandTotal() {
-                    let total = 0;
-                    this.categories.forEach(cat => {
-                        cat.items.forEach(item => {
-                            total += (parseFloat(item.price) || 0);
-                        });
-                    });
-                    return total;
-                },
-
-                calculateCategoryTotal(category) {
-                    return category.items.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
-                },
-
-                addCategory() {
-                    const id = Date.now();
-                    this.categories.push({
-                        id: id,
-                        title: 'New Category',
-                        items: []
-                    });
-                },
-
-                deleteCategory(id) {
-                    if (confirm('Are you sure you want to delete this category?')) {
-                        this.categories = this.categories.filter(c => c.id !== id);
-                    }
-                },
-
-                addItem(categoryId) {
-                    const category = this.categories.find(c => c.id === categoryId);
-                    if (category) {
-                        const itemId = Date.now();
-                        category.items.push({
-                            id: itemId,
-                            name: 'New Item',
-                            price: 0,
-                            link: '',
-                            completed: false
-                        });
-                        this.editingItemId = itemId;
-                    }
-                },
-
-                deleteItem(categoryId, itemId) {
-                    const category = this.categories.find(c => c.id === categoryId);
-                    if (category) {
-                        category.items = category.items.filter(i => i.id !== itemId);
-                    }
-                },
-
-                formatMoney(amount) {
-                    return new Intl.NumberFormat('id-ID').format(amount);
-                }
-            }
-        }
-
-        function getInitialData() {
-            return [
-                {
-                    id: 1,
-                    title: 'Alat Ibadah',
-                    items: [
-                        { id: 11, name: 'Mukena', price: 200000, link: '', completed: false },
-                        { id: 12, name: "Al Qur'an", price: 75000, link: '', completed: false },
-                        { id: 13, name: 'Sajadah', price: 50000, link: '', completed: false },
-                    ]
-                },
-                {
-                    id: 2,
-                    title: 'Skin Care',
-                    items: [
-                        { id: 21, name: 'Face wash', price: 50000, link: '', completed: false },
-                        { id: 22, name: 'Serum', price: 100000, link: '', completed: false },
-                        { id: 23, name: 'Moisturizer', price: 200000, link: '', completed: false },
-                        { id: 24, name: 'Sunscreen', price: 150000, link: '', completed: false },
-                    ]
-                },
-                {
-                    id: 3,
-                    title: 'Pakaian',
-                    items: [
-                        { id: 31, name: 'Baju tidur', price: 100000, link: '', completed: false },
-                        { id: 32, name: 'Baju', price: 150000, link: '', completed: false },
-                        { id: 33, name: 'Jilbab', price: 200000, link: '', completed: false },
-                        { id: 34, name: 'Jeans', price: 100000, link: '', completed: false },
-                    ]
-                },
-                {
-                    id: 4,
-                    title: 'Bodycare',
-                    items: [
-                        { id: 41, name: 'Body lotion', price: 150000, link: '', completed: false },
-                        { id: 42, name: 'Body scrub', price: 50000, link: '', completed: false },
-                        { id: 43, name: 'Deodorant', price: 30000, link: '', completed: false },
-                        { id: 44, name: 'Parfum', price: 250000, link: '', completed: false },
-                    ]
-                },
-                {
-                    id: 5,
-                    title: 'Aksesoris',
-                    items: [
-                        { id: 51, name: 'Sepatu', price: 1500000, link: '', completed: false },
-                        { id: 52, name: 'Tas', price: 100000, link: '', completed: false },
-                        { id: 53, name: 'Jam tangan', price: 100000, link: '', completed: false },
-                    ]
-                },
-                {
-                    id: 6,
-                    title: 'Make Up',
-                    items: [
-                        { id: 61, name: 'Lipstik', price: 100000, link: '', completed: false },
-                        { id: 62, name: 'Maskara', price: 100000, link: '', completed: false },
-                        { id: 63, name: 'Blush on', price: 50000, link: '', completed: false },
-                        { id: 64, name: 'Liptint', price: 100000, link: '', completed: false },
-                        { id: 65, name: 'Foundation', price: 250000, link: '', completed: false },
-                        { id: 66, name: 'Face spray', price: 150000, link: '', completed: false },
-                        { id: 67, name: 'Bedak', price: 150000, link: '', completed: false },
-                    ]
-                },
-                {
-                    id: 7,
-                    title: 'Toiletris',
-                    items: [
-                        { id: 71, name: 'Handuk', price: 200000, link: '', completed: false },
-                        { id: 72, name: 'Bodywash', price: 50000, link: '', completed: false },
-                        { id: 73, name: 'Sampo', price: 50000, link: '', completed: false },
-                        { id: 74, name: 'Kondisioner', price: 50000, link: '', completed: false },
-                        { id: 75, name: 'Pasta gigi', price: 20000, link: '', completed: false },
-                        { id: 76, name: 'Sikat gigi', price: 30000, link: '', completed: false },
-                    ]
-                }
-            ];
-        }
-    </script>
 </body>
 
 </html>
