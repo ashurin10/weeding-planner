@@ -505,6 +505,12 @@
                                                                     class="text-base text-stone-700 font-medium leading-snug"
                                                                     :class="{'line-through decoration-stone-400': item.completed}"
                                                                     x-text="item.name"></span>
+
+                                                                <!-- Mobile Price Display (Below Item Name) -->
+                                                                <span
+                                                                    class="text-sm text-stone-400 font-mono sm:hidden mt-0.5"
+                                                                    x-text="'Rp ' + formatMoney(item.price)"></span>
+
                                                                 <template x-if="item.link">
                                                                     <a :href="item.link" target="_blank"
                                                                         class="text-xs text-rose-400 hover:text-rose-600 hover:underline flex items-center gap-1 mt-0.5 w-fit"
@@ -516,25 +522,18 @@
                                                         </template>
                                                     </div>
 
-                                                    <!-- Price Section -->
-                                                    <div
-                                                        class="col-span-12 sm:col-span-4 text-left sm:text-right flex items-center justify-between sm:block mt-1 sm:mt-0">
+                                                    <!-- Price Section (Hidden on Mobile) -->
+                                                    <div class="hidden sm:block sm:col-span-4 text-right">
                                                         <template x-if="editingItemId === item.id">
                                                             <input type="text" x-model="item.price"
                                                                 @keydown.enter="editingItemId = null"
-                                                                class="w-full sm:w-32 bg-white border border-stone-200 rounded px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-rose-200 focus:border-rose-300 outline-none shadow-sm">
+                                                                class="w-full bg-white border border-stone-200 rounded px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-rose-200 focus:border-rose-300 outline-none shadow-sm">
                                                         </template>
                                                         <template x-if="editingItemId !== item.id">
-                                                            <div
-                                                                class="w-full flex justify-between items-center sm:block">
-                                                                <!-- Mobile Price Label & Value -->
-                                                                <span
-                                                                    class="text-xs text-stone-400 sm:hidden uppercase tracking-wider">Price</span>
-                                                                <span
-                                                                    class="text-sm text-stone-500 font-mono tracking-tight cursor-pointer"
-                                                                    @click="editingItemId = item.id"
-                                                                    x-text="formatMoney(item.price)"></span>
-                                                            </div>
+                                                            <span
+                                                                class="text-sm text-stone-500 font-mono tracking-tight cursor-pointer"
+                                                                @click="editingItemId = item.id"
+                                                                x-text="formatMoney(item.price)"></span>
                                                         </template>
                                                     </div>
                                                 </div>
