@@ -95,9 +95,13 @@
                 isOnline: false,
                 isSaving: false,
                 _saveTimeout: null,
+                isMobile: window.innerWidth < 640,
 
                 initApp() {
                     console.log('Wedding Planner App Initialized');
+                    window.addEventListener('resize', () => {
+                        this.isMobile = window.innerWidth < 640;
+                    });
 
                     if (db) {
                         this.isOnline = true;
@@ -466,22 +470,24 @@
                                 <div class="p-4 sm:p-6">
                                     <ul class="space-y-3">
                                         <template x-for="item in category.items" :key="item.id">
-                                            <li class="group flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg hover:bg-stone-50 transition-colors"
+                                            <li class="group flex items-start gap-3 p-3 rounded-lg hover:bg-stone-50 transition-colors relative"
                                                 :class="{'opacity-60': item.completed}">
 
-                                                <!-- Checkbox -->
-                                                <div class="flex items-center gap-3">
+                                                <!-- Checkbox (Always align top left) -->
+                                                <div class="flex-shrink-0 pt-1 sm:pt-0">
                                                     <input type="checkbox" x-model="item.completed"
-                                                        class="rounded-full appearance-none w-6 h-6 border-2 border-stone-300 checked:bg-rose-400 checked:border-rose-400 cursor-pointer transition-colors relative"
+                                                        class="rounded-full appearance-none w-5 h-5 border-2 border-stone-300 checked:bg-rose-400 checked:border-rose-400 cursor-pointer transition-colors relative"
                                                         style="background-image: url(&quot;data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e&quot;)">
                                                 </div>
 
-                                                <!-- Content -->
+                                                <!-- Content Wrapper -->
                                                 <div
-                                                    class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                                                    class="flex-1 min-w-0 grid grid-cols-12 gap-x-4 gap-y-1 items-center">
+
+                                                    <!-- Name Section -->
                                                     <div class="col-span-12 sm:col-span-8">
                                                         <template x-if="editingItemId === item.id">
-                                                            <div class="space-y-2">
+                                                            <div class="space-y-2 mb-2 sm:mb-0">
                                                                 <input type="text" x-model="item.name"
                                                                     @keydown.enter="editingItemId = null"
                                                                     class="w-full bg-white border border-stone-200 rounded px-3 py-2 text-base text-stone-700 focus:ring-2 focus:ring-rose-200 focus:border-rose-300 outline-none shadow-sm"
@@ -495,7 +501,8 @@
                                                         <template x-if="editingItemId !== item.id">
                                                             <div class="flex flex-col cursor-pointer"
                                                                 @dblclick="editingItemId = item.id">
-                                                                <span class="text-base text-stone-700 font-medium"
+                                                                <span
+                                                                    class="text-base text-stone-700 font-medium leading-snug"
                                                                     :class="{'line-through decoration-stone-400': item.completed}"
                                                                     x-text="item.name"></span>
                                                                 <template x-if="item.link">
@@ -509,25 +516,33 @@
                                                         </template>
                                                     </div>
 
-                                                    <!-- Price -->
-                                                    <div class="col-span-12 sm:col-span-4 text-left sm:text-right">
+                                                    <!-- Price Section -->
+                                                    <div
+                                                        class="col-span-12 sm:col-span-4 text-left sm:text-right flex items-center justify-between sm:block mt-1 sm:mt-0">
                                                         <template x-if="editingItemId === item.id">
                                                             <input type="text" x-model="item.price"
                                                                 @keydown.enter="editingItemId = null"
                                                                 class="w-full sm:w-32 bg-white border border-stone-200 rounded px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-rose-200 focus:border-rose-300 outline-none shadow-sm">
                                                         </template>
                                                         <template x-if="editingItemId !== item.id">
-                                                            <span
-                                                                class="text-sm text-stone-500 font-mono tracking-tight cursor-pointer"
-                                                                @click="editingItemId = item.id"
-                                                                x-text="formatMoney(item.price)"></span>
+                                                            <div
+                                                                class="w-full flex justify-between items-center sm:block">
+                                                                <!-- Mobile Price Label & Value -->
+                                                                <span
+                                                                    class="text-xs text-stone-400 sm:hidden uppercase tracking-wider">Price</span>
+                                                                <span
+                                                                    class="text-sm text-stone-500 font-mono tracking-tight cursor-pointer"
+                                                                    @click="editingItemId = item.id"
+                                                                    x-text="formatMoney(item.price)"></span>
+                                                            </div>
                                                         </template>
                                                     </div>
                                                 </div>
 
-                                                <!-- Actions -->
-                                                <div
-                                                    class="flex justify-end sm:opacity-0 group-hover:opacity-100 transition-opacity gap-2 min-w-[50px]">
+                                                <!-- Actions (Absolute on mobile) -->
+                                                <div class="flex sm:flex-col sm:justify-center items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-2 sm:static sm:right-auto sm:top-auto bg-white/90 sm:bg-transparent rounded-lg shadow-sm sm:shadow-none border sm:border-none border-stone-100 p-1 sm:p-0"
+                                                    :class="{'opacity-100 z-10': editingItemId === item.id, 'opacity-0 sm:opacity-0 pointer-events-none sm:pointer-events-auto': editingItemId !== item.id && !isMobile}">
+
                                                     <template x-if="editingItemId === item.id">
                                                         <button @click="editingItemId = null"
                                                             class="text-emerald-500 hover:bg-emerald-50 p-1.5 rounded-full transition-colors"
@@ -541,27 +556,29 @@
                                                         </button>
                                                     </template>
                                                     <template x-if="editingItemId !== item.id">
-                                                        <button @click="editingItemId = item.id"
-                                                            class="text-stone-400 hover:text-stone-600 hover:bg-stone-100 p-1.5 rounded-full transition-colors"
-                                                            title="Edit">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
-                                                                viewBox="0 0 20 20" fill="currentColor">
-                                                                <path
-                                                                    d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                                            </svg>
-                                                        </button>
+                                                        <div class="flex gap-1"
+                                                            :class="{'hidden': !isMobile && editingItemId !== item.id}">
+                                                            <button @click="editingItemId = item.id"
+                                                                class="text-stone-400 hover:text-stone-600 hover:bg-stone-100 p-1.5 rounded-full transition-colors"
+                                                                title="Edit">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
+                                                                    viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path
+                                                                        d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                                                </svg>
+                                                            </button>
+                                                            <button @click="deleteItem(category.id, item.id)"
+                                                                class="text-stone-300 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors"
+                                                                title="Delete">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
+                                                                    viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fill-rule="evenodd"
+                                                                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                                                        clip-rule="evenodd" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                                     </template>
-
-                                                    <button @click="deleteItem(category.id, item.id)"
-                                                        class="text-stone-300 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors"
-                                                        title="Delete">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
-                                                            viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fill-rule="evenodd"
-                                                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                                                                clip-rule="evenodd" />
-                                                        </svg>
-                                                    </button>
                                                 </div>
                                             </li>
                                         </template>
